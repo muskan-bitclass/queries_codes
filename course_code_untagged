@@ -1,0 +1,155 @@
+with category_tagging as 
+(
+   select
+      code,
+      case
+         when
+            p1 IS NULL 
+         then
+            dt1 
+         when
+            p2 is NULL 
+         then
+            dt2 
+         else
+            dt3 
+      end
+      as c0 , 
+      case
+         when
+            p1 is not null 
+            and 
+            (
+               t1 = p2 
+               or t1 = p3
+            )
+         then
+            dt1 
+         when
+            p2 is not null 
+            and 
+            (
+               t2 = p1 
+               or t2 = p3
+            )
+         then
+            dt2 
+         when
+            p3 is not null 
+            and 
+            (
+               t3 = p2 
+               or t3 = p1
+            )
+         then
+            dt3 
+      end
+      as c1 , 
+      case
+         when
+            p1 is not null 
+            and 
+            (
+               t1 <> p2 
+               and t1 <> p3
+            )
+         then
+            dt1 
+         when
+            p2 is not null 
+            and 
+            (
+               t2 <> p1 
+               or t2 <> p3
+            )
+         then
+            dt2 
+         when
+            p3 is not null 
+            and 
+            (
+               t3 <> p2 
+               or t3 <> p1
+            )
+         then
+            dt3 
+      end
+      as c2 
+   from
+      (
+         select
+            code,
+            internal_categories,
+            internal_categories[1] t1,
+            internal_categories[2] t2,
+            internal_categories[3] t3,
+            b.parent_category_ids[1] p1,
+            c.parent_category_ids[1] p2,
+            d.parent_category_ids[1] p3,
+            b.display_text dt1,
+            c.display_text dt2,
+            d.display_text dt3 
+         from
+            courses a 
+            left join
+               course_categories b 
+               on a.internal_categories[1] = b.id 
+            left join
+               course_categories c 
+               on a.internal_categories[2] = c.id 
+            left join
+               course_categories d 
+               on a.internal_categories[3] = d.id 
+         where
+            a.start_date >= '2022-01-01' 
+            and a.deleted_at IS NULL 
+      )
+      a 
+)
+select
+   * 
+from
+   (
+(
+      select
+         course_code, date(created_at + interval '5.5 hours') as order_date , buyer_code, amount 
+      from
+         orders 
+      where
+         course_code = 'Ced3a18' 
+         and deleted_at is null 
+         and status = 'paid') orders_table 
+         join
+            (
+               select
+                  code 
+               from
+                  users 
+               where
+                  users.meta ->> 'tag' is null 
+            )
+            users_table 
+            on orders_table.buyer_code = users_table.code 
+         join
+            (
+               select
+                  code 
+               from
+                  courses 
+               where
+                  deleted_at is null
+            )
+            courses_table 
+            on orders_table.course_Code = courses_table.code 
+         join
+            (
+               select
+                  code,
+                  c0 
+               from
+                  category_tagging
+            )
+            category 
+            on category.code = orders_table.course_Code 
+   )
+   innerQ
