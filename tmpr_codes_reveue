@@ -1,0 +1,109 @@
+with category_tagging as (
+  select 
+    code, 
+    case when p1 IS NULL then dt1 when p2 is NULL then dt2 else dt3 end as c0, 
+    case when p1 is not null 
+    and (
+      t1 = p2 
+      or t1 = p3
+    ) then dt1 when p2 is not null 
+    and (
+      t2 = p1 
+      or t2 = p3
+    ) then dt2 when p3 is not null 
+    and (
+      t3 = p2 
+      or t3 = p1
+    ) then dt3 end as c1, 
+    case when p1 is not null 
+    and (
+      t1 <> p2 
+      and t1 <> p3
+    ) then dt1 when p2 is not null 
+    and (
+      t2 <> p1 
+      or t2 <> p3
+    ) then dt2 when p3 is not null 
+    and (
+      t3 <> p2 
+      or t3 <> p1
+    ) then dt3 end as c2 
+  from 
+    (
+      select 
+        code, 
+        internal_categories, 
+        internal_categories[1] t1, 
+        internal_categories[2] t2, 
+        internal_categories[3] t3, 
+        b.parent_category_ids[1] p1, 
+        c.parent_category_ids[1] p2, 
+        d.parent_category_ids[1] p3, 
+        b.display_text dt1, 
+        c.display_text dt2, 
+        d.display_text dt3 
+      from 
+        courses a 
+        left join course_categories b on a.internal_categories[1] = b.id 
+        left join course_categories c on a.internal_categories[2] = c.id 
+        left join course_categories d on a.internal_categories[3] = d.id 
+      where 
+        a.start_date >= '2022-01-01' 
+        and a.deleted_at IS NULL
+    ) a
+) 
+select 
+  tmpr_code, 
+  c0, 
+  extract(
+    month 
+    from 
+      order_date
+  ) month_no, 
+  sum(revenue) as total_revenue 
+from 
+  (
+    select 
+      * 
+    from 
+      (
+        (
+          select 
+            courses.code, 
+            courses.amount, 
+            courses.heading, 
+            tmpr_id 
+          from 
+            courses 
+            join teacher_marketing_plan_courses ON courses.id = teacher_marketing_plan_courses.demo_course_id 
+          where 
+            courses.deleted_at is null
+        ) tmpc_courses 
+        join (
+          select 
+            code as tmpr_code, 
+            id 
+          from 
+            teacher_marketing_plan_registration
+        ) tmpr_table on tmpc_courses.tmpr_id = tmpr_table.id
+      ) 
+      join category_tagging on tmpc_courses.code = category_tagging.code 
+      join (
+        select 
+          buyer_code, 
+          amount as revenue, 
+          course_code, 
+          date(created_at + interval '5.5 hours') order_date 
+        from 
+          orders 
+        where 
+          deleted_at is null 
+          and status = 'paid' 
+          and date(created_at + interval '5.5 hours') between '2022-01-01' 
+          and '2022-05-31'
+      ) orders_table on tmpc_courses.code = orders_table.course_code
+  ) innerq 
+group by 
+  1, 
+  2, 
+  3
